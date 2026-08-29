@@ -1,0 +1,31 @@
+{
+  "task_id": "implement-minora-hermes-adapter-v1",
+  "repository": "munaagencyuz-ops/Minora-Hermes-Adapter",
+  "goal": "Implement a thin Hermes adapter that uses actual Hermes APIs and delegates all policy to Minora-Control-Plane.",
+  "must_read": [
+    "README.md",
+    "AGENTS.md",
+    "docs/ARCHITECTURE.md",
+    "docs/HERMES-V019-CONTRACT.md",
+    "docs/KANBAN-DISPATCH.md",
+    "docs/LIVE-E2E.md",
+    "docs/FAILURE-CATALOG.md"
+  ],
+  "non_negotiable": [
+    "Use ctx.dispatch_tool for real Kanban",
+    "Record the actual returned task ID",
+    "Complete model-facing schemas",
+    "Real session binding",
+    "No duplicated workflow policy",
+    "No fixture-only live claims",
+    "Pinned Hermes compatibility"
+  ],
+  "definition_of_done": [
+    "Contract tests pass",
+    "PluginManager loads the plugin",
+    "Real Kanban create and unblock return actual IDs/results",
+    "Bot fleet isolation is verified",
+    "A new-source live E2E evidence package exists",
+    "Fresh CI runs on exact final SHA"
+  ]
+}

@@ -1,0 +1,14 @@
+provider: vertex
+region: global
+models:
+  root_reasoning:
+    requested: google/gemini-3.1-pro-preview
+    fallback: google/gemini-2.5-pro
+  worker:
+    requested: google/gemini-3-flash-preview
+    fallback: google/gemini-2.5-flash
+reporting:
+  require_actual_model_id: true
+  require_fallback_reason: true
+security:
+  credentials_in_repository: false

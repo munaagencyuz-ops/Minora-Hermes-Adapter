@@ -1,0 +1,29 @@
+profiles:
+  minora-coordinator:
+    model_role: root_reasoning
+    domain_skills: []
+    plugin_tools:
+      - minora_project_start
+      - minora_state_get
+      - minora_artifact_register
+      - minora_transition_request
+      - minora_dispatch_skill
+      - minora_unblock_task
+  minora-tender-intake:
+    model_role: root_reasoning
+    domain_skills: [tender-rfp-intake-builder]
+  minora-brief:
+    model_role: worker
+    domain_skills: [campaign-brief-builder]
+  minora-context:
+    model_role: worker
+    domain_skills: [campaign-context-builder]
+  minora-competitor:
+    model_role: worker
+    domain_skills: [competitor-intelligence-builder]
+  minora-strategy:
+    model_role: root_reasoning
+    domain_skills: [campaign-communication-strategy-builder]
+  minora-revision:
+    model_role: root_reasoning
+    domain_skills: [strategy-revision-agent]

@@ -1,0 +1,30 @@
+{
+  "version": "1.0.0",
+  "contract_tests": [
+    "HA-C01 complete full tool schemas",
+    "HA-C02 handlers accept **kwargs",
+    "HA-C03 exact Hermes kanban_create field translation",
+    "HA-C04 ctx.dispatch_tool actually invoked",
+    "HA-C05 real returned task ID attached",
+    "HA-C06 failure without task ID",
+    "HA-C07 unblock invokes real kanban_unblock",
+    "HA-C08 project start binds actual session",
+    "HA-C09 strict human gate phrase parser",
+    "HA-C10 model/mixed text cannot resolve gate"
+  ],
+  "runtime_smoke": [
+    "HA-R01 PluginManager loads plugin",
+    "HA-R02 tools visible to coordinator",
+    "HA-R03 actual kanban_create returns task ID",
+    "HA-R04 specialist profile claims/completes task",
+    "HA-R05 completion handoff registers and validates artifact"
+  ],
+  "live_e2e": [
+    "HA-E01 source files absent from fixtures",
+    "HA-E02 real Hermes process/profile/plugin",
+    "HA-E03 real task intent and Kanban IDs",
+    "HA-E04 newly generated artifact and validator SHA",
+    "HA-E05 real human event and gate resolution",
+    "HA-E06 unsupported claims review"
+  ]
+}

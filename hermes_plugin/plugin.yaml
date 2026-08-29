@@ -1,0 +1,6 @@
+name: minora-hermes-adapter
+version: 0.1.0
+description: Hermes runtime adapter for Minora Control Plane
+requires_env:
+  - MINORA_CONTROL_PLANE_ROOT
+  - MINORA_SKILLS_ROOT

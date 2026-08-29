@@ -1,0 +1,80 @@
+{
+  "contract_version": "1.0.0",
+  "runtime": "Hermes Agent",
+  "supported_version_range": ">=0.19.0,<0.20.0",
+  "plugin": {
+    "required_files": [
+      "plugin.yaml",
+      "__init__.py"
+    ],
+    "entrypoint": "register(ctx)",
+    "public_apis": [
+      "ctx.register_tool",
+      "ctx.register_hook",
+      "ctx.dispatch_tool",
+      "ctx.profile_name"
+    ]
+  },
+  "tool_schema_shape": {
+    "required": [
+      "name",
+      "description",
+      "parameters"
+    ]
+  },
+  "kanban_create": {
+    "required": [
+      "title",
+      "assignee"
+    ],
+    "optional": [
+      "body",
+      "parents",
+      "tenant",
+      "priority",
+      "workspace_kind",
+      "workspace_path",
+      "project",
+      "triage",
+      "idempotency_key",
+      "max_runtime_seconds",
+      "initial_status",
+      "skills",
+      "goal_mode",
+      "goal_max_turns",
+      "model",
+      "provider"
+    ]
+  },
+  "kanban_unblock": {
+    "required": [
+      "task_id"
+    ],
+    "optional": [
+      "board"
+    ]
+  },
+  "hooks": {
+    "pre_llm_call": [
+      "session_id",
+      "user_message",
+      "conversation_history",
+      "is_first_turn",
+      "model",
+      "platform"
+    ],
+    "pre_tool_call": [
+      "tool_name",
+      "args",
+      "task_id"
+    ],
+    "post_tool_call": [
+      "tool_name",
+      "args",
+      "result",
+      "task_id",
+      "duration_ms"
+    ]
+  },
+  "rule": "Compatibility must be reverified against the installed build; never infer missing fields."
+}
