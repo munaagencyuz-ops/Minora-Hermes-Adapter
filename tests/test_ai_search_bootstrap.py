@@ -73,6 +73,9 @@ class InstallTests(unittest.TestCase):
         return 0, 'ok'
 
     def cli_with_native_metadata(self, args, env):
+        if args == ['--version']:
+            self.calls.append(args)
+            return 0, 'Hermes Agent 0.21.1'
         result = self.cli(args, env)
         if args[:2] == ['profile', 'install'] and '--help' not in args:
             source = Path(args[2])
@@ -125,6 +128,37 @@ class InstallTests(unittest.TestCase):
         with self.assertRaises(ValueError):
             self.run_install(runner=self.cli_with_native_metadata)
 
+    def test_v021_without_distribution_provenance_is_refused(self):
+        def v021_without_metadata(args, env):
+            if args == ['--version']:
+                self.calls.append(args)
+                return 0, 'Hermes Agent 0.21.1'
+            return self.cli(args, env)
+        with self.assertRaises(ValueError):
+            self.run_install(runner=v021_without_metadata)
+
+    def test_v021_null_distribution_provenance_is_refused(self):
+        def null_metadata(args, env):
+            result = self.cli_with_native_metadata(args, env)
+            if args[:2] == ['profile', 'install'] and '--help' not in args:
+                installed = self.home / 'profiles/minora-ai-search-us/distribution.yaml'
+                manifest = json.loads(installed.read_text())
+                manifest['source'] = None
+                manifest['installed_at'] = None
+                installed.write_text(json.dumps(manifest))
+            return result
+        with self.assertRaises(ValueError):
+            self.run_install(runner=null_metadata)
+
+    def test_file_entry_slash_mutation_is_refused(self):
+        self.run_install(runner=self.cli_with_native_metadata)
+        installed = self.home / 'profiles/minora-ai-search-us/distribution.yaml'
+        manifest = json.loads(installed.read_text())
+        manifest['distribution_owned'][1] = 'SOUL.md/'
+        installed.write_text(json.dumps(manifest))
+        with self.assertRaises(ValueError):
+            self.run_install(runner=self.cli_with_native_metadata)
+
     def test_receipt_cannot_hide_distribution_source_change(self):
         self.run_install(runner=self.cli_with_native_metadata)
         base = self.home / 'profiles/minora-ai-search-us'
@@ -148,6 +182,24 @@ class InstallTests(unittest.TestCase):
         with self.assertRaises(ValueError):
             self.run_install()
 
+    def test_receipt_cannot_delete_distribution_verification(self):
+        self.run_install(runner=self.cli_with_native_metadata)
+        base = self.home / 'profiles/minora-ai-search-us'
+        receipt_path = base / '.minora-install.json'
+        receipt = json.loads(receipt_path.read_text())
+        del receipt['installed_files']['distribution.yaml']
+        receipt_path.write_text(json.dumps(receipt))
+        (base / 'distribution.yaml').unlink()
+        with self.assertRaises(ValueError):
+            self.run_install(runner=self.cli_with_native_metadata)
+
+    def test_malformed_receipt_is_refused_cleanly(self):
+        self.run_install()
+        receipt_path = self.home / 'profiles/minora-ai-search-us/.minora-install.json'
+        receipt_path.write_text('[]')
+        with self.assertRaises(ValueError):
+            self.run_install()
+
     def test_no_secret_copy(self):
         self.run_install()
         p = self.home / 'profiles/minora-ai-search-us'
@@ -159,7 +211,7 @@ class InstallTests(unittest.TestCase):
         count = len(self.calls)
         r = self.run_install()
         self.assertEqual(r['status'], 'already_installed')
-        self.assertEqual(len(self.calls), count)
+        self.assertEqual(len(self.calls), count + 1)  # live Hermes version is re-verified
 
     def test_local_credentials_preserved(self):
         self.run_install()
@@ -280,6 +332,21 @@ class InstallTests(unittest.TestCase):
         with self.assertRaises(ValueError):
             self.run_install()
         self.assertEqual(list(outside.iterdir()), [])
+
+    def test_empty_cron_output_scaffold_is_allowed(self):
+        self.run_install()
+        output = self.home / 'profiles/minora-ai-search-us/cron/output'
+        output.mkdir(parents=True)
+        r = self.run_install()
+        self.assertEqual(r['status'], 'already_installed')
+
+    def test_cron_schedule_is_refused(self):
+        self.run_install()
+        cron = self.home / 'profiles/minora-ai-search-us/cron'
+        cron.mkdir()
+        (cron / 'schedule.json').write_text('{}')
+        with self.assertRaises(ValueError):
+            self.run_install()
 
     def test_added_mcp_is_config_drift(self):
         self.run_install()
