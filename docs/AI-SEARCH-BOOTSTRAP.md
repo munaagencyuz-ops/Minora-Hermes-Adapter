@@ -18,7 +18,7 @@ python -B scripts/ai_search_bootstrap.py --bundle /absolute/approved/ai-search-u
 
 `--hermes-root` can select a dedicated absolute Hermes root. It must match the host's actual deployment configuration. Do not use this option to pretend a directory is an OS sandbox.
 
-The script verifies a SHA-256 manifest and exact eight-skill inventory, stages only allowlisted payload files, and invokes the installed CLI's native `profile install LOCAL_DIR --name minora-ai-search-us --yes`. It detects CLI capability and records the observed version. It does not guess compatibility with a nonexistent command or update Hermes itself. It then checks actual installed contents/configuration, root-profile integrity and absence of copied credentials/memory.
+The script verifies a SHA-256 manifest and exact eight-skill inventory, stages only allowlisted payload files, and invokes the installed CLI's native `profile install LOCAL_DIR --name minora-ai-search-us --yes`. It detects CLI capability and records the observed version. It does not guess compatibility with a nonexistent command or update Hermes itself. It then checks actual installed contents/configuration, root-profile integrity and absence of copied credentials/memory. Hermes versions that rewrite `distribution.yaml` may add only verified native provenance fields (`source`, timezone-aware `installed_at`), omit an empty `env_requires`, and normalize trailing directory slashes; every security-relevant manifest value remains checked.
 
 The distribution manifest explicitly owns itself plus curated skills, knowledge, scripts, contracts, fixtures, SOUL, configuration and the no-bundled-skills marker. No private git history is installed. Repeating the exact release checks integrity without replacing user credentials. A different release, unmanaged target or local managed-file drift stops rather than overwriting. An interrupted install is retained for inspection; no blind recursive deletion.
 
@@ -42,7 +42,7 @@ Do not pass `URL#commit` as if native distribution pinning were supported. Use a
 python -B -m unittest discover -s tests -p 'test_ai_search_bootstrap.py' -v
 ```
 
-The 27 new tests simulate the native CLI boundary; they are not live Hermes E2E. The older repository suite and configured external providers have separate test requirements. Read the domain pack's `LIVE_ACCEPTANCE.md` before enabling access. Installer success explicitly returns `nick_access_ready: false` and names the remaining provider, isolation and gateway checks.
+The bootstrap contract tests simulate the native CLI boundary, including current native distribution-metadata rewriting; they are not live Hermes E2E. The older repository suite and configured external providers have separate test requirements. Read the domain pack's `LIVE_ACCEPTANCE.md` before enabling access. Installer success explicitly returns `nick_access_ready: false` and names the remaining provider, isolation and gateway checks.
 
 Primary references (reviewed 2026-09-20):
 - https://hermes-agent.nousresearch.com/docs/user-guide/profile-distributions

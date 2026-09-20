@@ -12,6 +12,7 @@ import os
 import re
 import shutil
 import subprocess
+from datetime import datetime
 from pathlib import Path
 
 PROFILE = 'minora-ai-search-us'
@@ -95,6 +96,14 @@ def managed_config(target):
             'skills': {'external_dirs': []}, 'mcp_servers': {}}
 
 
+def distribution_manifest(version):
+    return {'name': PROFILE, 'version': version,
+            'description': 'Specialized US AI Search audit profile',
+            'author': 'Minora AI', 'env_requires': [],
+            'distribution_owned': ['distribution.yaml', 'SOUL.md', 'config.yaml', 'skills/', 'knowledge/',
+                                   'scripts/', 'contracts/', 'fixtures/', '.no-bundled-skills']}
+
+
 def read_config(path):
     raw = path.read_text(encoding='utf-8')
     try:
@@ -115,6 +124,39 @@ def subset(actual, expected):
         for k, v in expected.items())
 
 
+def verify_distribution(path, receipt):
+    actual = read_config(path)
+    expected = distribution_manifest(receipt['version'])
+    expected_source = str(path.parent.parent.parent / 'minora-distributions' /
+                          (receipt['version'] + '-' + receipt['bundle_sha256'][:12]))
+    recorded_source = receipt.get('distribution_source')
+    if recorded_source is not None:
+        check(recorded_source == expected_source, 'Receipt distribution source changed')
+    check(isinstance(actual, dict), 'Installed distribution manifest is not an object')
+    allowed = set(expected) | {'source', 'installed_at'}
+    check(set(actual) <= allowed, 'Unexpected installed distribution metadata')
+    for key in ['name', 'version', 'description', 'author']:
+        check(actual.get(key) == expected[key], 'Installed distribution metadata changed: ' + key)
+    # Hermes v0.21 omits an empty env_requires and normalizes owned-directory slashes.
+    check(actual.get('env_requires', []) == expected['env_requires'],
+          'Installed distribution metadata changed: env_requires')
+    owned = actual.get('distribution_owned')
+    check(isinstance(owned, list) and all(isinstance(x, str) for x in owned),
+          'Installed distribution metadata changed: distribution_owned')
+    check([x.rstrip('/') for x in owned] == [x.rstrip('/') for x in expected['distribution_owned']],
+          'Installed distribution metadata changed: distribution_owned')
+    source, installed_at = actual.get('source'), actual.get('installed_at')
+    check((source is None) == (installed_at is None), 'Incomplete installed distribution provenance')
+    if source is not None:
+        check(source == expected_source, 'Installed distribution source changed')
+        check(isinstance(installed_at, str), 'Invalid installed_at metadata')
+        try:
+            parsed = datetime.fromisoformat(installed_at)
+        except ValueError as exc:
+            raise ValueError('Invalid installed_at metadata') from exc
+        check(parsed.tzinfo is not None, 'installed_at metadata must include a timezone')
+
+
 def verify_installed(target, receipt):
     check(not target.is_symlink(), 'Profile path must not be a symlink')
     for rel, digest in receipt['installed_files'].items():
@@ -122,6 +164,9 @@ def verify_installed(target, receipt):
         if rel == 'config.yaml':
             check(p.is_file() and subset(read_config(p), managed_config(target)),
                   'Managed tool/isolation config changed; review rather than overwrite')
+        elif rel == 'distribution.yaml':
+            check(p.is_file(), 'Missing installed distribution manifest')
+            verify_distribution(p, receipt)
         else:
             check(p.is_file() and sha(p) == digest, 'Installed file drift: ' + rel)
     present = sorted(p.relative_to(target / 'skills').as_posix() for p in (target / 'skills').rglob('SKILL.md'))
@@ -148,6 +193,7 @@ def install(bundle, hermes_root, apply=False, runner=None):
         receipt = json.loads(receipt_path.read_text(encoding='utf-8'))
         check(receipt.get('bundle_sha256') == digest,
               'Different release: stage and review a side-by-side upgrade; no automatic force overwrite')
+        check(receipt.get('version') == m['version'], 'Receipt release version changed')
         check(isinstance(receipt.get('installed_files'), dict) and
               all(receipt['installed_files'].get(k) == v for k, v in m['files'].items()),
               'Receipt does not match the approved bundle')
@@ -205,10 +251,7 @@ def install(bundle, hermes_root, apply=False, runner=None):
             'Nashville is a default market hypothesis, not a rule that all companies are local. '
             'A profile is not a filesystem sandbox; do not claim otherwise.\n', encoding='utf-8')
         (release / 'config.yaml').write_text(json.dumps(managed_config(target), indent=2) + '\n', encoding='utf-8')
-        manifest = {'name': PROFILE, 'version': m['version'], 'description': 'Specialized US AI Search audit profile',
-                    'author': 'Minora AI', 'env_requires': [],
-                    'distribution_owned': ['distribution.yaml', 'SOUL.md', 'config.yaml', 'skills/', 'knowledge/',
-                                           'scripts/', 'contracts/', 'fixtures/', '.no-bundled-skills']}
+        manifest = distribution_manifest(m['version'])
         (release / 'distribution.yaml').write_text(json.dumps(manifest, indent=2) + '\n', encoding='utf-8')
         expected = {p.relative_to(release).as_posix(): sha(p) for p in release.rglob('*') if p.is_file()}
         before = root_fingerprint(home)
@@ -221,6 +264,7 @@ def install(bundle, hermes_root, apply=False, runner=None):
                   'Unexpected credentials or memory in fresh profile; inspect locally')
         receipt = {'bundle_sha256': digest, 'version': m['version'], 'skills': m['skills'],
                    'installed_files': expected, 'hermes_version_observed': version_match.group(),
+                   'distribution_source': str(release),
                    'validation': 'native-install-file-readback', 'nick_access_ready': False}
         verify_installed(target, receipt)
         target.chmod(0o700)

@@ -72,8 +72,21 @@ class InstallTests(unittest.TestCase):
             return 0, 'installed'
         return 0, 'ok'
 
-    def run_install(self, apply=True):
-        return module.install(self.bundle, self.home, apply=apply, runner=self.cli)
+    def cli_with_native_metadata(self, args, env):
+        result = self.cli(args, env)
+        if args[:2] == ['profile', 'install'] and '--help' not in args:
+            source = Path(args[2])
+            installed = self.home / 'profiles/minora-ai-search-us/distribution.yaml'
+            manifest = json.loads(installed.read_text())
+            manifest.pop('env_requires')
+            manifest['distribution_owned'] = [x.rstrip('/') for x in manifest['distribution_owned']]
+            manifest['source'] = str(source)
+            manifest['installed_at'] = '2026-09-20T10:31:02+00:00'
+            installed.write_text(json.dumps(manifest))
+        return result
+
+    def run_install(self, apply=True, runner=None):
+        return module.install(self.bundle, self.home, apply=apply, runner=runner or self.cli)
 
     def test_preview_does_not_modify_profile(self):
         r = self.run_install(False)
@@ -84,6 +97,56 @@ class InstallTests(unittest.TestCase):
         r = self.run_install()
         self.assertEqual(r['status'], 'installed_requires_provider_and_live_checks')
         self.assertEqual(len(list((self.home / 'profiles/minora-ai-search-us/skills').glob('*/SKILL.md'))), 8)
+
+    def test_native_distribution_metadata_rewrite_is_verified(self):
+        r = self.run_install(runner=self.cli_with_native_metadata)
+        self.assertEqual(r['status'], 'installed_requires_provider_and_live_checks')
+        r = self.run_install(runner=self.cli_with_native_metadata)
+        self.assertEqual(r['status'], 'already_installed')
+
+    def test_wrong_native_distribution_source_is_refused(self):
+        def wrong_source(args, env):
+            result = self.cli_with_native_metadata(args, env)
+            if args[:2] == ['profile', 'install'] and '--help' not in args:
+                installed = self.home / 'profiles/minora-ai-search-us/distribution.yaml'
+                manifest = json.loads(installed.read_text())
+                manifest['source'] = '/unapproved/source'
+                installed.write_text(json.dumps(manifest))
+            return result
+        with self.assertRaises(ValueError):
+            self.run_install(runner=wrong_source)
+
+    def test_installed_distribution_tampering_is_refused(self):
+        self.run_install(runner=self.cli_with_native_metadata)
+        installed = self.home / 'profiles/minora-ai-search-us/distribution.yaml'
+        manifest = json.loads(installed.read_text())
+        manifest['unexpected'] = 'value'
+        installed.write_text(json.dumps(manifest))
+        with self.assertRaises(ValueError):
+            self.run_install(runner=self.cli_with_native_metadata)
+
+    def test_receipt_cannot_hide_distribution_source_change(self):
+        self.run_install(runner=self.cli_with_native_metadata)
+        base = self.home / 'profiles/minora-ai-search-us'
+        installed = base / 'distribution.yaml'
+        manifest = json.loads(installed.read_text())
+        manifest['source'] = '/unapproved/source'
+        installed.write_text(json.dumps(manifest))
+        receipt_path = base / '.minora-install.json'
+        receipt = json.loads(receipt_path.read_text())
+        receipt['distribution_source'] = '/unapproved/source'
+        receipt_path.write_text(json.dumps(receipt))
+        with self.assertRaises(ValueError):
+            self.run_install(runner=self.cli_with_native_metadata)
+
+    def test_receipt_version_change_is_refused(self):
+        self.run_install()
+        receipt_path = self.home / 'profiles/minora-ai-search-us/.minora-install.json'
+        receipt = json.loads(receipt_path.read_text())
+        receipt['version'] = '9.9.9'
+        receipt_path.write_text(json.dumps(receipt))
+        with self.assertRaises(ValueError):
+            self.run_install()
 
     def test_no_secret_copy(self):
         self.run_install()
