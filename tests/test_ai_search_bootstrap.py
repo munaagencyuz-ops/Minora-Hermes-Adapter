@@ -4,6 +4,7 @@ import importlib.util
 import json
 import os
 import shutil
+import sqlite3
 import tempfile
 import unittest
 from pathlib import Path
@@ -333,12 +334,35 @@ class InstallTests(unittest.TestCase):
             self.run_install()
         self.assertEqual(list(outside.iterdir()), [])
 
-    def test_empty_cron_output_scaffold_is_allowed(self):
+    def test_empty_cron_runtime_scaffold_is_allowed(self):
         self.run_install()
-        output = self.home / 'profiles/minora-ai-search-us/cron/output'
+        cron = self.home / 'profiles/minora-ai-search-us/cron'
+        output = cron / 'output'
         output.mkdir(parents=True)
+        for name in ['.jobs.lock', '.tick.lock']:
+            (cron / name).write_text('')
+        for name in ['ticker_heartbeat', 'ticker_last_success']:
+            (cron / name).write_text('2026-09-20T11:00')
+        connection = sqlite3.connect(cron / 'executions.db')
+        connection.execute('CREATE TABLE executions (id TEXT)')
+        connection.commit()
+        connection.close()
+        (cron / 'executions.db-shm').write_bytes(b'')
+        (cron / 'executions.db-wal').write_bytes(b'')
         r = self.run_install()
         self.assertEqual(r['status'], 'already_installed')
+
+    def test_cron_execution_is_refused(self):
+        self.run_install()
+        cron = self.home / 'profiles/minora-ai-search-us/cron'
+        cron.mkdir()
+        connection = sqlite3.connect(cron / 'executions.db')
+        connection.execute('CREATE TABLE executions (id TEXT)')
+        connection.execute("INSERT INTO executions VALUES ('run-1')")
+        connection.commit()
+        connection.close()
+        with self.assertRaises(ValueError):
+            self.run_install()
 
     def test_cron_schedule_is_refused(self):
         self.run_install()

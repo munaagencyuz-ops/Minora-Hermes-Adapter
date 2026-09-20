@@ -11,6 +11,7 @@ import json
 import os
 import re
 import shutil
+import sqlite3
 import subprocess
 from datetime import datetime
 from pathlib import Path
@@ -203,6 +204,54 @@ def verify_receipt(receipt, manifest, digest, target, current_version):
     check(receipt.get('nick_access_ready') is False, 'Receipt access gate changed')
 
 
+def verify_cron_state(cron):
+    if not cron.exists():
+        return
+    check(cron.is_dir() and not cron.is_symlink(), 'Unexpected cron state; deployment review required')
+    allowed = {'output', '.jobs.lock', '.tick.lock', 'executions.db',
+               'executions.db-shm', 'executions.db-wal',
+               'ticker_heartbeat', 'ticker_last_success'}
+    entries = {p.name: p for p in cron.iterdir()}
+    check(set(entries) <= allowed, 'Unexpected schedules; deployment review required')
+    output = entries.get('output')
+    if output is not None:
+        check(output.is_dir() and not output.is_symlink() and not any(output.iterdir()),
+              'Unexpected cron output; deployment review required')
+    for name in ['.jobs.lock', '.tick.lock']:
+        p = entries.get(name)
+        if p is not None:
+            check(p.is_file() and not p.is_symlink() and p.stat().st_size == 0,
+                  'Unexpected cron lock state; deployment review required')
+    for name in ['ticker_heartbeat', 'ticker_last_success']:
+        p = entries.get(name)
+        if p is not None:
+            check(p.is_file() and not p.is_symlink() and p.stat().st_size <= 128,
+                  'Unexpected cron ticker state; deployment review required')
+    database = entries.get('executions.db')
+    if database is not None:
+        check(database.is_file() and not database.is_symlink() and database.stat().st_size <= 10 * 1024 * 1024,
+              'Unexpected cron execution database; deployment review required')
+        try:
+            connection = sqlite3.connect('file:' + str(database) + '?mode=ro', uri=True)
+            try:
+                tables = {row[0] for row in connection.execute(
+                    "SELECT name FROM sqlite_master WHERE type='table'")}
+                check(tables <= {'executions', 'sqlite_sequence'},
+                      'Unexpected cron database schema; deployment review required')
+                if 'executions' in tables:
+                    check(connection.execute('SELECT COUNT(*) FROM executions').fetchone()[0] == 0,
+                          'Cron executions exist; deployment review required')
+            finally:
+                connection.close()
+        except sqlite3.Error as exc:
+            raise ValueError('Unreadable cron execution database; deployment review required') from exc
+    for name in ['executions.db-shm', 'executions.db-wal']:
+        p = entries.get(name)
+        if p is not None:
+            check(p.is_file() and not p.is_symlink() and p.stat().st_size <= 10 * 1024 * 1024,
+                  'Unexpected cron database sidecar; deployment review required')
+
+
 def verify_installed(target, expected_files, manifest, digest, require_provenance):
     check(not target.is_symlink(), 'Profile path must not be a symlink')
     for rel, expected_digest in expected_files.items():
@@ -220,12 +269,7 @@ def verify_installed(target, expected_files, manifest, digest, require_provenanc
     plugins = target / 'plugins'
     check(not plugins.exists() or (plugins.is_dir() and not any(plugins.iterdir())),
           'Unexpected plugins; deployment review required')
-    cron = target / 'cron'
-    if cron.exists():
-        check(cron.is_dir(), 'Unexpected cron state; deployment review required')
-        entries = list(cron.iterdir())
-        check(all(p.name == 'output' and p.is_dir() and not any(p.iterdir()) for p in entries),
-              'Unexpected schedules; deployment review required')
+    verify_cron_state(target / 'cron')
 
 
 def root_fingerprint(home):
